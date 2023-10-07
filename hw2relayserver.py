@@ -42,8 +42,8 @@ def handle_get_global_filelist(sock):
     msg = "[Global]"
     with gf_lock:
         for gf in global_file_list:
-            new_msg = msg + gf
-            sock.send(new_msg.encode())
+            msg = msg + "\n" + gf
+    sock.send(msg.encode())
 
 
 def handle_download_file(id, sock):
@@ -58,11 +58,10 @@ def handle_download_file(id, sock):
     srcid = filename.split('/')[0]
     srcfilename = filename.split('/')[1]
     sockobj = None
-    with gf_lock:
-        for gf in global_file_list:
-            if gf['id'] == srcid:
-                sockobj = gf['obj']
-                break
+    for th in threadpool:
+        if th['id'] == srcid and th['valid'] is True:
+            sockobj = th['obj']
+            break
     msg = "[Relay]" + srcfilename
     sockobj.send(msg.encode())
     dir_path = "./" + srcid
@@ -93,9 +92,17 @@ def handle_download_file(id, sock):
     printglobalfile()
 
 
-def handle_exit(sock):
+def handle_exit(sock, id):
+    print("{} has left".format(id))
     exitnotice = "Notified RelayServer\nGoodbye!"
     sock.send(exitnotice.encode())
+    broadcast("[Notice] {} has left".format(id))
+    with gf_lock:
+        for gf in global_file_list[:]:
+            if gf.startswith(id):
+                global_file_list.remove(gf)
+    broadcast("[Notice] The global file list is updated")
+    printglobalfile()
 
 
 def socket_handling(csocket, mytid):
@@ -112,8 +119,7 @@ def socket_handling(csocket, mytid):
         elif option == '3':
             handle_download_file(id, csocket)
         elif option == '4':
-            handle_exit(csocket)
-            print("{} is logout".format(id))
+            handle_exit(csocket, id)
             break
 
     threadpool[mytid]['valid'] = False
@@ -131,13 +137,13 @@ def find_free_id():
 TCP Case
 '''
 serverSocket = socket(AF_INET, SOCK_STREAM)
+serverSocket.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
 serverSocket.bind((serverIP, serverPort))
 serverSocket.listen(maxlisten)  # maximum listen
 print('The TCP Server is ready to receive.')
 print('IP Address is', ipcheck())
 
 while True:
-    #print('accept wait')
     connectionSocket, clientaddr = serverSocket.accept()
     eid = find_free_id()
     if eid == -1:

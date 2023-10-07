@@ -11,8 +11,10 @@ def handle_recving(sock):
         if msg.startswith('[Notice]'):  # notice case
             print(msg)
         elif msg.startswith('[Global]'):  # global file list case
-            partmsg = msg.split(']')[1]
-            print(partmsg)
+            partmsg = msg.split('\n')
+            partmsg = partmsg[1:]
+            for g in partmsg:
+                print(g)
         elif msg.startswith('[Request]'):  # file download case
             with cond:
                 if msg == '[Request] Not available file':
