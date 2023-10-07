@@ -37,6 +37,7 @@ def handle_recving(sock):
         elif msg.startswith('[Relay]'):  # file upload case
             filename = msg.split(']')[1]
             file_path = os.path.join('./', filename)
+            sock.send("5".encode())
             with open(file_path, 'rb') as bfile:
                 body = bfile.read()
                 print("Upload start")

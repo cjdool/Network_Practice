@@ -8,7 +8,7 @@ maxlisten = 10
 threadpool = [{'valid': False} for _ in range(maxlisten)]
 gf_lock = threading.Lock()
 global_file_list = []
-
+cond = threading.Condition()
 
 def ipcheck():
     return gethostbyname(gethostname())
@@ -60,7 +60,7 @@ def handle_download_file(id, sock):
     sockobj = None
     for th in threadpool:
         if th['id'] == srcid and th['valid'] is True:
-            sockobj = th['obj']
+            sockobj = th['socket']
             break
     msg = "[Relay]" + srcfilename
     sockobj.send(msg.encode())
@@ -74,11 +74,13 @@ def handle_download_file(id, sock):
     file_path = os.path.join(dir_path, srcfilename)
     with open(file_path, 'wb') as f:
         print("Retrieving started")
-        while True:
-            pkt = sockobj.recv(1024)
-            if not pkt:
-                break
-            f.write(pkt)
+        with cond:
+            while True:
+                pkt = sockobj.recv(1024)
+                if not pkt:
+                    break
+                f.write(pkt)
+            cond.notify()
         print('Retrieved {} from {}'.format(srcfilename, srcid))
 
     msg = "[Request]" + srcfilename
@@ -121,6 +123,10 @@ def socket_handling(csocket, mytid):
         elif option == '4':
             handle_exit(csocket, id)
             break
+        elif option == '5':
+            print("Relaying option")
+            with cond:
+                cond.wait()
 
     threadpool[mytid]['valid'] = False
     csocket.close()
