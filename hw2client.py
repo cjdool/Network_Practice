@@ -1,6 +1,7 @@
 from socket import *
 import os
 import threading
+import math
 
 
 def handle_recving(sock):
@@ -24,25 +25,38 @@ def handle_recving(sock):
             filename = msg.split(']')[1]
             file_path = os.path.join('./', filename)
             with cond:
+                filelen = int(sock.recv(1024).decode())
+                fileiter = math.ceil(filelen / 1024)
+                sock.send(str(filelen).encode())
                 with open(file_path, 'wb') as bfile:
                     print("Download start")
-                    while True:
+                    for i in range(fileiter):
                         pkt = sock.recv(1024)
-                        if not pkt:
-                            break
                         bfile.write(pkt)
                     print("Download end")
-                cond.notify()
-            print("{} has been downloaded".format(filename))
+                    cond.notify()
+                    print("{} has been downloaded".format(filename))
         elif msg.startswith('[Relay]'):  # file upload case
             filename = msg.split(']')[1]
             file_path = os.path.join('./', filename)
             sock.send("5".encode())
             with open(file_path, 'rb') as bfile:
                 body = bfile.read()
-                print("Upload start")
+            print("Upload start")
+            filelen = str(len(body))
+            print(filelen)
+            sock.send(filelen.encode())
+            recvlen = sock.recv(1024).decode()
+            if filelen != recvlen:
+                print('File Size is not matched')
+                continue
+            if str(type(body)).find("str") > -1:
+                print("String based file")
+                sock.sendall(bytes(body, "ASCII"))
+            else:
+                print("Not String based file")
                 sock.sendall(body)
-                print("Upload end")
+            print("Upload end")
         else:
             if msg == "Notified RelayServer\nGoodbye!":
                 print(msg)

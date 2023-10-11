@@ -1,6 +1,7 @@
 from socket import *
 import threading
 import os
+import math
 
 serverIP = 'localhost'
 serverPort = 10080
@@ -72,24 +73,37 @@ def handle_download_file(id, sock):
         except OSError as e:
             print("Directory create error: {}".format(e))
     file_path = os.path.join(dir_path, srcfilename)
-    with open(file_path, 'wb') as f:
-        print("Retrieving started")
-        with cond:
-            while True:
+    with cond:
+        filelen = int(sockobj.recv(1024).decode())
+        fileiter = math.ceil(filelen / 1024)
+        sockobj.send(str(filelen).encode())
+        with open(file_path, 'wb') as f:
+            print("Retrieving started")
+            for i in range(fileiter):
                 pkt = sockobj.recv(1024)
-                if not pkt:
-                    break
                 f.write(pkt)
             cond.notify()
-        print('Retrieved {} from {}'.format(srcfilename, srcid))
+            print('Retrieved {} from {}'.format(srcfilename, srcid))
 
     msg = "[Request]" + srcfilename
     sock.send(msg.encode())
     with open(file_path, 'rb') as f:
         body = f.read()
-        print("Transfer started")
+    print("Transfer started")
+    filelen = str(len(body))
+    print(filelen)
+    sock.send(filelen.encode())
+    recvlen = sock.recv(1024).decode()
+    if filelen != recvlen:
+        print('File Size is not matched')
+        return
+    if str(type(body)).find("str") > -1:
+        print("String based file")
+        sock.sendall(bytes(body, "ASCII"))
+    else:
+        print("Not String based file")
         sock.sendall(body)
-        print('The transfer of {} to {} has been completed'.format(srcfilename, id))
+    print('The transfer of {} to {} has been completed'.format(srcfilename, id))
 
     printglobalfile()
 
